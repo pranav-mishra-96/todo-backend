@@ -1,45 +1,59 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../database');
+const { sql, poolPromise } = require('../dbConfig');
 
 // Get all todos
-router.get('/', (req, res) => {
-  db.all('SELECT * FROM todos', [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
-  });
+router.get('/', async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request().query('SELECT * FROM dbo.todos');
+    res.json(result.recordset);
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
 });
 
 // Add a new todo
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const { title } = req.body;
-  db.run('INSERT INTO todos (title) VALUES (?)', [title], function (err) {
-    if (err) return res.status(500).json({ error: err.message });
-    res.status(201).json({ id: this.lastID, title, completed: 0 });
-  });
+  try {
+    const pool = await poolPromise;
+    await pool.request().query(
+      `INSERT INTO dbo.todos (title, completed) VALUES ('${title}', 0)`
+    );
+    res.status(201).send('Todo added successfully');
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
 });
 
 // Update a todo
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   const { id } = req.params;
   const { title, completed } = req.body;
-  db.run(
-    'UPDATE todos SET title = ?, completed = ? WHERE id = ?',
-    [title, completed, id],
-    function (err) {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ message: 'Todo updated successfully' });
-    }
-  );
+  try {
+    const pool = await poolPromise;
+    await pool
+      .request()
+      .query(
+        `UPDATE dbo.todos SET title = '${title}', completed = ${completed} WHERE id = ${id}`
+      );
+    res.send('Todo updated successfully');
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
 });
 
 // Delete a todo
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   const { id } = req.params;
-  db.run('DELETE FROM todos WHERE id = ?', [id], function (err) {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ message: 'Todo deleted successfully' });
-  });
+  try {
+    const pool = await poolPromise;
+    await pool.request().query(`DELETE FROM dbo.todos WHERE id = ${id}`);
+    res.send('Todo deleted successfully');
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
 });
 
 module.exports = router;
